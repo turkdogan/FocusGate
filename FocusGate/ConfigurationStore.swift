@@ -1,22 +1,35 @@
 //
 //  ConfigurationStore.swift
-//  PageBlocker
+//  FocusGate
 //
-//  Manages loading and saving filter configuration via App Group
+//  Manages loading and saving filter configuration via App Group using UserDefaults
 //
 
 import Foundation
 import Combine
+import os.log
 
 class ConfigurationStore: ObservableObject {
-    @Published var configuration: FilterConfiguration
+    @Published var configuration: FilterConfiguration {
+        didSet {
+            save()
+        }
+    }
 
-    private let fileURL: URL
+    private let userDefaults: UserDefaults?
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private let logger = OSLog(subsystem: "dev.turkdogan.FocusGate", category: "ConfigurationStore")
 
     // App Group identifier - must match entitlements
     static let appGroupIdentifier = "group.dev.turkdogan.focusgate.shared"
+
+    // Storage key
+    private static let configurationKey = "filterConfiguration"
+
+    // Posted after every save so FilterManager can push the new
+    // configuration into the Network Extension preferences.
+    static let configurationDidChange = Notification.Name("FocusGateConfigurationDidChange")
 
     init() {
         self.encoder = JSONEncoder()
@@ -24,48 +37,67 @@ class ConfigurationStore: ObservableObject {
 
         self.decoder = JSONDecoder()
 
-        // Get App Group container URL
-        if let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: ConfigurationStore.appGroupIdentifier
-        ) {
-            self.fileURL = containerURL.appendingPathComponent("config.json")
-        } else {
-            // Fallback to temporary directory if App Group not available (for development)
-            print("⚠️ Warning: App Group container not available, using temporary directory")
-            let tempDir = FileManager.default.temporaryDirectory
-            self.fileURL = tempDir.appendingPathComponent("pageblocker-config.json")
-        }
+        // Get App Group UserDefaults
+        self.userDefaults = UserDefaults(suiteName: ConfigurationStore.appGroupIdentifier)
 
         // Load existing configuration or create new
-        if let data = try? Data(contentsOf: fileURL),
+        if let data = userDefaults?.data(forKey: ConfigurationStore.configurationKey),
            let config = try? decoder.decode(FilterConfiguration.self, from: data) {
             self.configuration = config
-            print("✅ Loaded configuration from \(fileURL.path)")
+            os_log("Loaded configuration from UserDefaults: %d sites, %d rule sets", log: logger, type: .info,
+                   config.blockedSites.count, config.ruleSets.count)
         } else {
             self.configuration = FilterConfiguration()
-            print("📝 Created new configuration at \(fileURL.path)")
+            os_log("Created new configuration", log: logger, type: .info)
+            // Save initial empty configuration
+            save()
         }
     }
 
     // MARK: - Persistence
 
-    func save() {
+    private func save() {
         do {
             let data = try encoder.encode(configuration)
-            try data.write(to: fileURL, options: .atomic)
-            print("💾 Saved configuration to \(fileURL.path)")
+            userDefaults?.set(data, forKey: ConfigurationStore.configurationKey)
+            userDefaults?.set(Date(), forKey: "lastUpdated")
+
+            // Send Darwin notification to inform extension of changes
+            notifyExtension()
+
+            // The extension runs as root and cannot read this user's App Group
+            // defaults, so the configuration must also travel through the NE
+            // provider configuration. FilterManager listens for this.
+            NotificationCenter.default.post(name: ConfigurationStore.configurationDidChange, object: nil)
+
+            os_log("Saved configuration: %d sites, %d rule sets", log: logger, type: .info,
+                   configuration.blockedSites.count, configuration.ruleSets.count)
         } catch {
-            print("❌ Failed to save configuration: \(error)")
+            os_log("Failed to save configuration: %{public}@", log: logger, type: .error, error.localizedDescription)
         }
     }
 
+    private func notifyExtension() {
+        // Post Darwin notification to inform extension of configuration changes
+        CFNotificationCenterPostNotification(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName("dev.turkdogan.focusgate.updated" as CFString),
+            nil,
+            nil,
+            true
+        )
+        os_log("Sent Darwin notification to extension", log: logger, type: .debug)
+    }
+
     func reload() {
-        guard let data = try? Data(contentsOf: fileURL),
+        guard let data = userDefaults?.data(forKey: ConfigurationStore.configurationKey),
               let config = try? decoder.decode(FilterConfiguration.self, from: data) else {
+            os_log("Failed to reload configuration", log: logger, type: .error)
             return
         }
         self.configuration = config
-        print("🔄 Reloaded configuration from \(fileURL.path)")
+        os_log("Reloaded configuration: %d sites, %d rule sets", log: logger, type: .info,
+               config.blockedSites.count, config.ruleSets.count)
     }
 
     // MARK: - Blocked Sites

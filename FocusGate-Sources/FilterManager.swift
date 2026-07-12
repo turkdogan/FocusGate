@@ -47,14 +47,29 @@ class FilterManager: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        // Create filter configuration
-        let config = NEFilterProviderConfiguration()
-        config.filterBrowsers = true
-        config.filterSockets = true
+        // Load current configuration to ensure we have the latest settings
+        try await manager.loadFromPreferences()
 
-        manager.providerConfiguration = config
+        // Create filter configuration if it doesn't exist
+        if manager.providerConfiguration == nil {
+            print("📝 Creating new Network Extension configuration")
+
+            let config = NEFilterProviderConfiguration()
+            config.filterBrowsers = true
+            config.filterSockets = true
+            config.filterPackets = false
+
+            // CRITICAL: Tell the system which extension to load
+            config.filterDataProviderBundleIdentifier = "dev.turkdogan.FocusGate.FocusGateExtension"
+
+            manager.providerConfiguration = config
+            print("✅ Created configuration with bundle ID: dev.turkdogan.FocusGate.FocusGateExtension")
+        } else {
+            print("ℹ️ Using existing Network Extension configuration")
+        }
+
         manager.isEnabled = true
-        manager.localizedDescription = "PageBlocker Content Filter"
+        manager.localizedDescription = "FocusGate Content Filter"
 
         do {
             try await manager.saveToPreferences()
@@ -66,10 +81,12 @@ class FilterManager: ObservableObject {
             // Note: User must approve in System Settings for filter to actually start
             if !isEnabled {
                 print("⚠️ Filter requires user approval in System Settings")
-                status = "Pending approval in System Settings"
+                print("📍 Go to: System Settings > Privacy & Security > Network Extensions")
+                status = "Pending approval in System Settings > Privacy & Security > Network Extensions"
             }
         } catch {
             print("❌ Failed to enable filter: \(error)")
+            status = "Error: \(error.localizedDescription)"
             throw error
         }
     }
@@ -86,6 +103,32 @@ class FilterManager: ObservableObject {
             await loadStatus()
         } catch {
             print("❌ Failed to disable filter: \(error)")
+            throw error
+        }
+    }
+
+    // MARK: - Configuration Reset
+
+    func resetConfiguration() async throws {
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            // Load current preferences
+            try await manager.loadFromPreferences()
+
+            // Remove the configuration completely
+            print("🗑️ Removing old configuration...")
+            try await manager.removeFromPreferences()
+            print("✅ Old configuration removed")
+
+            // Wait a moment
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+
+            // Now enable with fresh configuration
+            try await enable()
+        } catch {
+            print("❌ Failed to reset configuration: \(error)")
             throw error
         }
     }

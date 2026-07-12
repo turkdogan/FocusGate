@@ -51,6 +51,15 @@ struct StatusView: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                             }
+
+                            // Reset configuration button
+                            Button("Reset Configuration") {
+                                Task {
+                                    try? await filterManager.resetConfiguration()
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .foregroundColor(.orange)
                         }
                     }
 

@@ -19,6 +19,25 @@ struct StatusView: View {
                 .font(.title2)
                 .bold()
 
+            GroupBox("Network Extension Setup") {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundColor(.blue)
+                        Text("The FocusGate content filter extension ships with the app, so there is nothing extra to install. Click \"Enable Filter\" below and then approve the extension in System Settings > Privacy & Security > Network Extensions when prompted.")
+                            .font(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Button("Open System Settings") {
+                        filterManager.openSystemSettings()
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.caption)
+                }
+                .padding(.vertical, 8)
+            }
+
             // Filter status
             GroupBox {
                 VStack(spacing: 16) {
@@ -51,6 +70,15 @@ struct StatusView: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                             }
+
+                            // Reset configuration button
+                            Button("Reset Configuration") {
+                                Task {
+                                    try? await filterManager.resetConfiguration()
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .foregroundColor(.orange)
                         }
                     }
 

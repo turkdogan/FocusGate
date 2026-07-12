@@ -1,6 +1,6 @@
 //
 //  FilterDataProvider.swift
-//  PageBlockerExtension
+//  FocusGateExtension
 //
 //  Network Extension filter provider - evaluates and blocks network flows
 //
@@ -8,65 +8,156 @@
 import Foundation
 import NetworkExtension
 import Network
+import os.log
+
+/// Shared storage mechanism for communicating between main app and extension
+class SharedBlocklist {
+    private let logger = OSLog(subsystem: "dev.turkdogan.FocusGate", category: "SharedBlocklist")
+    private let userDefaults = UserDefaults(suiteName: ConfigurationStore.appGroupIdentifier)
+
+    // MARK: - Storage Keys
+    private enum StorageKeys {
+        static let configuration = "filterConfiguration"
+        static let lastUpdated = "lastUpdated"
+    }
+
+    init() {}
+
+    // MARK: - Public Properties
+
+    var configuration: FilterConfiguration? {
+        get {
+            os_log("📥 Attempting to load configuration from UserDefaults...", log: logger, type: .debug)
+
+            guard let userDefaults = userDefaults else {
+                os_log("❌ ERROR: UserDefaults is nil! App Group not accessible.", log: logger, type: .error)
+                return nil
+            }
+
+            guard let data = userDefaults.data(forKey: StorageKeys.configuration) else {
+                os_log("❌ ERROR: No data found for key '%{public}@' in UserDefaults", log: logger, type: .error,
+                       StorageKeys.configuration)
+                return nil
+            }
+
+            os_log("📦 Found data in UserDefaults, size: %d bytes", log: logger, type: .debug, data.count)
+
+            guard let config = try? JSONDecoder().decode(FilterConfiguration.self, from: data) else {
+                os_log("❌ ERROR: Failed to decode FilterConfiguration from data", log: logger, type: .error)
+                return nil
+            }
+
+            os_log("✅ Successfully decoded configuration", log: logger, type: .debug)
+            return config
+        }
+        set {
+            guard let newValue = newValue,
+                  let data = try? JSONEncoder().encode(newValue) else {
+                os_log("Failed to encode configuration", log: logger, type: .error)
+                return
+            }
+            userDefaults?.set(data, forKey: StorageKeys.configuration)
+            userDefaults?.set(Date(), forKey: StorageKeys.lastUpdated)
+            os_log("Updated configuration: %d sites, %d rule sets", log: logger, type: .info,
+                   newValue.blockedSites.count, newValue.ruleSets.count)
+        }
+    }
+
+    // MARK: - Public Methods
+
+    func loadConfiguration() {
+        let config = configuration
+        os_log("Loaded configuration: %d sites, %d rule sets", log: logger, type: .info,
+               config?.blockedSites.count ?? 0, config?.ruleSets.count ?? 0)
+    }
+}
 
 class FilterDataProvider: NEFilterDataProvider {
 
-    private var configuration: FilterConfiguration?
-    private let configURL: URL
-    private let logger: DecisionLogger
+    private let logger = OSLog(subsystem: "dev.turkdogan.FocusGate", category: "FilterDataProvider")
+    private var sharedStorage: SharedBlocklist
+    private let decisionLogger: DecisionLogger
 
     override init() {
-        // Get App Group container URL
-        if let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: ConfigurationStore.appGroupIdentifier
-        ) {
-            self.configURL = containerURL.appendingPathComponent("config.json")
-        } else {
-            // Fallback
-            let tempDir = FileManager.default.temporaryDirectory
-            self.configURL = tempDir.appendingPathComponent("pageblocker-config.json")
-        }
-
-        self.logger = DecisionLogger()
-
+        self.sharedStorage = SharedBlocklist()
+        self.decisionLogger = DecisionLogger()
         super.init()
 
-        print("🚀 FilterDataProvider initialized")
-        loadConfiguration()
+        os_log("FilterDataProvider initialized", log: logger, type: .info)
     }
 
     // MARK: - Flow Handling
 
     override func startFilter(completionHandler: @escaping (Error?) -> Void) {
-        print("🟢 Filter starting...")
-        loadConfiguration()
+        os_log("🚀 FilterDataProvider starting...", log: logger, type: .info)
+
+        // Load initial configuration from shared storage
+        sharedStorage.loadConfiguration()
+
+        // Log initial state
+        if let config = sharedStorage.configuration {
+            os_log("✅ Configuration loaded - Sites: %d, Rule sets: %d", log: logger, type: .info,
+                   config.blockedSites.count, config.ruleSets.count)
+
+            // Log the actual blocked sites
+            for site in config.blockedSites {
+                os_log("📝 Blocked site: %{public}@ (enabled: %d)", log: logger, type: .info,
+                       site.pattern, site.enabled ? 1 : 0)
+            }
+        } else {
+            os_log("❌ ERROR: No configuration loaded! Extension will allow all traffic.", log: logger, type: .error)
+        }
+
+        // Set up monitoring for configuration changes via Darwin notifications
+        setupConfigurationChangeMonitoring()
+
+        os_log("✅ Content filter started successfully", log: logger, type: .info)
         completionHandler(nil)
     }
 
+    private func setupConfigurationChangeMonitoring() {
+        // Use Darwin notifications to listen for changes from main app
+        let notificationName = "dev.turkdogan.focusgate.updated" as CFString
+        let center = CFNotificationCenterGetDarwinNotifyCenter()
+
+        let observer = UnsafeRawPointer(Unmanaged.passUnretained(self).toOpaque())
+
+        CFNotificationCenterAddObserver(
+            center,
+            observer,
+            { (center, observer, name, object, userInfo) in
+                guard let observer = observer else { return }
+                let provider = Unmanaged<FilterDataProvider>.fromOpaque(observer).takeUnretainedValue()
+                provider.reloadConfiguration()
+            },
+            notificationName,
+            nil,
+            .deliverImmediately
+        )
+
+        os_log("Darwin notification observer registered for configuration changes", log: logger, type: .info)
+    }
+
+    private func reloadConfiguration() {
+        os_log("Reloading configuration from shared storage", log: logger, type: .info)
+
+        sharedStorage.loadConfiguration()
+
+        if let config = sharedStorage.configuration {
+            os_log("Configuration reloaded - Sites: %d, Rule sets: %d", log: logger, type: .info,
+                   config.blockedSites.count, config.ruleSets.count)
+        }
+    }
+
     override func stopFilter(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-        print("🔴 Filter stopping with reason: \(reason)")
+        os_log("Stopping content filter, reason: %d", log: logger, type: .info, reason.rawValue)
         completionHandler()
     }
 
     override func handleNewFlow(_ flow: NEFilterFlow) -> NEFilterNewFlowVerdict {
-        // Extract hostname from the flow
-        guard let hostname = extractHostname(from: flow) else {
-            // Cannot determine hostname, allow by default
-            return .allow()
-        }
-
-        // Reload configuration (in production, consider caching with periodic reload)
-        loadConfiguration()
-
-        guard let config = configuration else {
-            // No configuration, allow all
-            return .allow()
-        }
-
-        // Evaluate against blocking rules
-        let verdict = evaluateFlow(hostname: hostname, config: config)
-
-        return verdict
+        // TEMPORARY TEST: Block EVERYTHING to verify blocking works
+        os_log("🚫 TEST MODE: Blocking ALL traffic", log: logger, type: .info)
+        return .drop()
     }
 
     // MARK: - Flow Evaluation
@@ -94,54 +185,50 @@ class FilterDataProvider: NEFilterDataProvider {
                 }
 
                 // Block and log
-                logger.log(hostname: hostname, action: .block, ruleSetName: ruleSet.name)
-                print("🚫 BLOCKED: \(hostname) (rule set: \(ruleSet.name))")
+                decisionLogger.log(hostname: hostname, action: .block, ruleSetName: ruleSet.name)
+                os_log("BLOCKED: %{public}@ (rule set: %{public}@)", log: logger, type: .info, hostname, ruleSet.name)
                 return .drop()
             } else {
                 // No rule set, always block
-                logger.log(hostname: hostname, action: .block, ruleSetName: nil)
-                print("🚫 BLOCKED: \(hostname) (always active)")
+                decisionLogger.log(hostname: hostname, action: .block, ruleSetName: nil)
+                os_log("BLOCKED: %{public}@ (always active)", log: logger, type: .info, hostname)
                 return .drop()
             }
         }
 
         // No match, allow
-        logger.log(hostname: hostname, action: .allow)
-        print("✅ ALLOWED: \(hostname)")
+        decisionLogger.log(hostname: hostname, action: .allow)
+        os_log("ALLOWED: %{public}@", log: logger, type: .debug, hostname)
         return .allow()
     }
 
     // MARK: - Hostname Extraction
 
     private func extractHostname(from flow: NEFilterFlow) -> String? {
-        // Try to get hostname from socket flow
+        // Get hostname from socket flow
         if let socketFlow = flow as? NEFilterSocketFlow {
-            if let remoteEndpoint = socketFlow.remoteEndpoint as? NWHostEndpoint {
-                return remoteEndpoint.hostname
+            // Try remoteHostname first (preferred method)
+            if let hostname = socketFlow.remoteHostname, !hostname.isEmpty {
+                os_log("Extracted hostname: %{public}@", log: logger, type: .debug, hostname)
+                return hostname
             }
-        }
 
-        // Try to get from browser flow (Safari, etc.)
-        if let browserFlow = flow as? NEFilterBrowserFlow {
-            if let url = browserFlow.request?.url,
-               let host = url.host {
+            // Try URL if available
+            if let url = socketFlow.url, let host = url.host, !host.isEmpty {
+                os_log("Extracted hostname from URL: %{public}@", log: logger, type: .debug, host)
                 return host
             }
+
+            // Fallback to deprecated NWHostEndpoint
+            if let hostEndpoint = socketFlow.remoteEndpoint as? NWHostEndpoint {
+                let hostname = hostEndpoint.hostname
+                os_log("Extracted hostname from NWHostEndpoint: %{public}@", log: logger, type: .debug, hostname)
+                return hostname
+            }
         }
 
+        os_log("Could not extract hostname from flow", log: logger, type: .debug)
         return nil
     }
 
-    // MARK: - Configuration Management
-
-    private func loadConfiguration() {
-        guard let data = try? Data(contentsOf: configURL),
-              let config = try? JSONDecoder().decode(FilterConfiguration.self, from: data) else {
-            print("⚠️ Failed to load configuration from \(configURL.path)")
-            return
-        }
-
-        self.configuration = config
-        print("📥 Loaded configuration: \(config.blockedSites.count) sites, \(config.ruleSets.count) rule sets")
-    }
 }
