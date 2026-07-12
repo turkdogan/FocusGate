@@ -52,16 +52,21 @@ class FilterManager: ObservableObject {
 
     /// Re-embeds the latest blocklist into the enabled filter configuration.
     func pushConfigurationUpdate() async {
+        guard let data = currentConfigData() else { return }
+
+        // Live update: the running provider applies this immediately.
+        ProviderXPCClient.shared.updateConfiguration(data)
+
+        // Persisted update: what the provider reads on its next restart.
         do {
             try await manager.loadFromPreferences()
             guard manager.isEnabled, let providerConfig = manager.providerConfiguration else { return }
-            guard let data = currentConfigData() else { return }
 
             providerConfig.vendorConfiguration = ["filterConfiguration": data]
             try await manager.saveToPreferences()
             print("✅ Pushed updated configuration to extension (\(data.count) bytes)")
         } catch {
-            print("❌ Failed to push configuration update: \(error)")
+            print("❌ Failed to persist configuration update: \(error)")
         }
     }
 

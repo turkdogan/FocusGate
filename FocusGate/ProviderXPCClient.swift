@@ -74,4 +74,17 @@ final class ProviderXPCClient {
 
         proxy.clearDecisions { finish($0) }
     }
+
+    /// Pushes the configuration to the running provider so changes (pause,
+    /// blocklist edits) apply immediately instead of on next restart.
+    func updateConfiguration(_ data: Data, completion: @escaping (Bool) -> Void = { _ in }) {
+        let finish: (Bool) -> Void = { ok in DispatchQueue.main.async { completion(ok) } }
+
+        guard let proxy = proxy(onError: { finish(false) }) else {
+            finish(false)
+            return
+        }
+
+        proxy.updateConfiguration(data) { finish($0) }
+    }
 }

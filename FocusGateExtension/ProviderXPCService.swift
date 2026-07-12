@@ -41,6 +41,9 @@ final class ProviderXPCService: NSObject {
 
     let decisions = DecisionStore()
 
+    /// Set by the provider; called with each configuration pushed by the app.
+    var configurationUpdateHandler: ((FilterConfiguration) -> Void)?
+
     private let logger = OSLog(subsystem: "dev.turkdogan.FocusGate", category: "ProviderXPCService")
     private var listener: NSXPCListener?
 
@@ -84,6 +87,20 @@ extension ProviderXPCService: ProviderCommunication {
 
     func clearDecisions(reply: @escaping (Bool) -> Void) {
         decisions.clear()
+        reply(true)
+    }
+
+    func updateConfiguration(_ data: Data, reply: @escaping (Bool) -> Void) {
+        guard let config = try? JSONDecoder().decode(FilterConfiguration.self, from: data) else {
+            os_log("Rejected configuration update: undecodable payload (%d bytes)",
+                   log: logger, type: .error, data.count)
+            reply(false)
+            return
+        }
+
+        os_log("Configuration updated over XPC - Sites: %d, paused: %d",
+               log: logger, type: .info, config.blockedSites.count, config.isPaused ? 1 : 0)
+        configurationUpdateHandler?(config)
         reply(true)
     }
 }

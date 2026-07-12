@@ -30,4 +30,9 @@ enum FocusGateXPC {
     func fetchRecentDecisions(sinceTimestamp: Double, reply: @escaping (Data) -> Void)
 
     func clearDecisions(reply: @escaping (Bool) -> Void)
+
+    /// Applies a JSON-encoded FilterConfiguration immediately. The saved
+    /// provider configuration only reaches the extension on restart, so
+    /// live changes (pause, blocklist edits) travel this way.
+    func updateConfiguration(_ data: Data, reply: @escaping (Bool) -> Void)
 }

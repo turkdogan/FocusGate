@@ -100,6 +100,18 @@ class ConfigurationStore: ObservableObject {
                config.blockedSites.count, config.ruleSets.count)
     }
 
+    // MARK: - Pause
+
+    func pause(for duration: TimeInterval) {
+        configuration.pausedUntil = Date().addingTimeInterval(duration)
+    }
+
+    func resumeBlocking() {
+        configuration.pausedUntil = nil
+    }
+
+    var isPaused: Bool { configuration.isPaused }
+
     // MARK: - Blocked Sites
 
     func addBlockedSite(_ site: BlockedSite) {

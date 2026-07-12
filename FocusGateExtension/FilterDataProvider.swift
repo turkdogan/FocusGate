@@ -112,7 +112,12 @@ class FilterDataProvider: NEFilterDataProvider {
         fileLogger.log("🚀 startFilter called")
         os_log("🚀 FilterDataProvider starting...", log: logger, type: .info)
 
-        // Expose the activity feed to the main app
+        // Expose the activity feed to the main app and accept live
+        // configuration pushes (the saved provider configuration is only
+        // re-read on restart).
+        ProviderXPCService.shared.configurationUpdateHandler = { [weak self] config in
+            self?.activeConfig = config
+        }
         ProviderXPCService.shared.start()
 
         // Primary source: vendorConfiguration embedded by the main app.
@@ -193,6 +198,10 @@ class FilterDataProvider: NEFilterDataProvider {
 
         guard let config = activeConfig else {
             os_log("No configuration available, allowing %{public}@", log: logger, type: .debug, hostname)
+            return .allow()
+        }
+
+        if config.isPaused {
             return .allow()
         }
 

@@ -175,10 +175,21 @@ struct FilterConfiguration: Codable {
     var ruleSets: [RuleSet]
     var version: Int
 
-    init(blockedSites: [BlockedSite] = [], ruleSets: [RuleSet] = [], version: Int = 1) {
+    /// While set and in the future, the filter allows all traffic. Enforced
+    /// by the extension itself so blocking resumes on schedule even if the
+    /// app is not running.
+    var pausedUntil: Date?
+
+    init(blockedSites: [BlockedSite] = [], ruleSets: [RuleSet] = [], version: Int = 1, pausedUntil: Date? = nil) {
         self.blockedSites = blockedSites
         self.ruleSets = ruleSets
         self.version = version
+        self.pausedUntil = pausedUntil
+    }
+
+    var isPaused: Bool {
+        guard let pausedUntil else { return false }
+        return pausedUntil > Date()
     }
 }
 
