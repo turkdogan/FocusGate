@@ -112,6 +112,9 @@ class FilterDataProvider: NEFilterDataProvider {
         fileLogger.log("🚀 startFilter called")
         os_log("🚀 FilterDataProvider starting...", log: logger, type: .info)
 
+        // Expose the activity feed to the main app
+        ProviderXPCService.shared.start()
+
         // Primary source: vendorConfiguration embedded by the main app.
         // Fallback: shared storage (works only if extension and app run as
         // the same user, kept for compatibility).
@@ -221,19 +224,20 @@ class FilterDataProvider: NEFilterDataProvider {
                 }
 
                 // Block and log
-                decisionLogger.log(hostname: hostname, action: .block, ruleSetName: ruleSet.name)
+                ProviderXPCService.shared.decisions.add(hostname: hostname, action: .block, ruleSetName: ruleSet.name)
                 os_log("BLOCKED: %{public}@ (rule set: %{public}@)", log: logger, type: .info, hostname, ruleSet.name)
                 return .drop()
             } else {
                 // No rule set, always block
-                decisionLogger.log(hostname: hostname, action: .block, ruleSetName: nil)
+                ProviderXPCService.shared.decisions.add(hostname: hostname, action: .block)
                 os_log("BLOCKED: %{public}@ (always active)", log: logger, type: .info, hostname)
                 return .drop()
             }
         }
 
-        // No match, allow
-        decisionLogger.log(hostname: hostname, action: .allow)
+        // No match, allow. Deliberately not recorded in the activity feed:
+        // allows are every connection the Mac makes — noise that buries the
+        // blocks and a privacy liability worth avoiding.
         os_log("ALLOWED: %{public}@", log: logger, type: .debug, hostname)
         return .allow()
     }

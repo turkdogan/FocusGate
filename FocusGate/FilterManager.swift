@@ -75,7 +75,9 @@ class FilterManager: ObservableObject {
             status = "Restart your Mac to finish installing the extension"
         case .failed(let message):
             status = "Extension error: \(message)"
-        case .idle, .activated:
+        case .activated:
+            status = isEnabled ? "Active" : "Inactive"
+        case .idle:
             break
         }
     }
@@ -91,6 +93,13 @@ class FilterManager: ObservableObject {
             self.isEnabled = manager.isEnabled
             self.status = manager.isEnabled ? "Active" : "Inactive"
             print("📊 Filter status: \(status)")
+
+            // If the filter is already set up, re-request activation so a
+            // newer bundled extension version is staged automatically
+            // (no-op when the installed version is current).
+            if manager.providerConfiguration != nil {
+                try? await systemExtension.activate()
+            }
         } catch {
             self.status = "Error: \(error.localizedDescription)"
             print("❌ Failed to load filter status: \(error)")

@@ -201,14 +201,15 @@ struct StatusView: View {
     // MARK: - Actions
 
     private func loadLog() {
-        let logger = DecisionLogger()
-        logEntries = logger.getRecentEntries(limit: 100)
+        ProviderXPCClient.shared.fetchRecentDecisions { entries in
+            logEntries = Array(entries.prefix(100))
+        }
     }
 
     private func clearLog() {
-        let logger = DecisionLogger()
-        logger.clear()
-        loadLog()
+        ProviderXPCClient.shared.clearDecisions { _ in
+            loadLog()
+        }
     }
 
     private func startAutoRefresh() {
