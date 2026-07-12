@@ -9,6 +9,7 @@
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.dev.turkdogan.focusgate.shared</string>
+		<string>9B6S2Y8856.dev.turkdogan.focusgate</string>
 	</array>
 </dict>
 </plist>

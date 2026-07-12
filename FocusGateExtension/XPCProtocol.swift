@@ -14,7 +14,7 @@ enum FocusGateXPC {
     /// Mach service the extension listens on. Must be prefixed with an
     /// app group from the extension's entitlements or the sandboxed app
     /// is not allowed to connect.
-    static let serviceName = "group.dev.turkdogan.focusgate.shared.xpc"
+    static let serviceName = "9B6S2Y8856.dev.turkdogan.focusgate.xpc"
 
     /// Only clients signed by this team may connect.
     static let codeSigningRequirement =
