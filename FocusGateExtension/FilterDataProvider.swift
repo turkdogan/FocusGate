@@ -79,11 +79,6 @@ class FilterDataProvider: NEFilterDataProvider {
     private let decisionLogger: DecisionLogger
     private let fileLogger = FileLogger()
 
-    /// Active configuration, cached so flows don't re-decode JSON.
-    /// Sourced from the provider configuration's vendorConfiguration — the
-    /// extension runs as root and cannot read the user's App Group defaults.
-    private var activeConfig: FilterConfiguration?
-
     private func loadConfigurationFromProvider() -> FilterConfiguration? {
         guard let vendor = filterConfiguration.vendorConfiguration,
               let data = vendor["filterConfiguration"] as? Data else {
@@ -112,22 +107,18 @@ class FilterDataProvider: NEFilterDataProvider {
         fileLogger.log("🚀 startFilter called")
         os_log("🚀 FilterDataProvider starting...", log: logger, type: .info)
 
-        // Expose the activity feed to the main app and accept live
-        // configuration pushes (the saved provider configuration is only
-        // re-read on restart).
-        ProviderXPCService.shared.configurationUpdateHandler = { [weak self] config in
-            self?.activeConfig = config
-        }
+        // Expose the activity feed to the main app; live configuration
+        // pushes land in FilterState directly.
         ProviderXPCService.shared.start()
 
         // Primary source: vendorConfiguration embedded by the main app.
         // Fallback: shared storage (works only if extension and app run as
         // the same user, kept for compatibility).
         sharedStorage.loadConfiguration()
-        activeConfig = loadConfigurationFromProvider() ?? sharedStorage.configuration
+        FilterState.shared.config = loadConfigurationFromProvider() ?? sharedStorage.configuration
 
         // Log initial state
-        if let config = activeConfig {
+        if let config = FilterState.shared.config {
             fileLogger.log("✅ Config loaded: \(config.blockedSites.count) sites, \(config.ruleSets.count) rule sets")
             os_log("✅ Configuration loaded - Sites: %d, Rule sets: %d", log: logger, type: .info,
                    config.blockedSites.count, config.ruleSets.count)
@@ -178,9 +169,9 @@ class FilterDataProvider: NEFilterDataProvider {
         os_log("Reloading configuration", log: logger, type: .info)
 
         sharedStorage.loadConfiguration()
-        activeConfig = loadConfigurationFromProvider() ?? sharedStorage.configuration
+        FilterState.shared.config = loadConfigurationFromProvider() ?? sharedStorage.configuration
 
-        if let config = activeConfig {
+        if let config = FilterState.shared.config {
             os_log("Configuration reloaded - Sites: %d, Rule sets: %d", log: logger, type: .info,
                    config.blockedSites.count, config.ruleSets.count)
         }
@@ -196,12 +187,8 @@ class FilterDataProvider: NEFilterDataProvider {
             return .allow()
         }
 
-        guard let config = activeConfig else {
+        guard let config = FilterState.shared.config else {
             os_log("No configuration available, allowing %{public}@", log: logger, type: .debug, hostname)
-            return .allow()
-        }
-
-        if config.isPaused {
             return .allow()
         }
 
@@ -211,44 +198,21 @@ class FilterDataProvider: NEFilterDataProvider {
     // MARK: - Flow Evaluation
 
     private func evaluateFlow(hostname: String, config: FilterConfiguration) -> NEFilterNewFlowVerdict {
-        let now = Date()
-        let timezone = TimeZone.current
+        let decision = config.blockDecision(for: hostname)
 
-        // Check each blocked site
-        for site in config.blockedSites where site.enabled {
-            // Check if hostname matches pattern
-            guard DomainMatcher.matches(hostname, pattern: site) else {
-                continue
-            }
-
-            // If site has a rule set, check if it's currently active
-            if let ruleSetId = site.ruleSetId {
-                guard let ruleSet = config.ruleSets.first(where: { $0.id == ruleSetId }) else {
-                    continue
-                }
-
-                if !ruleSet.isActive(at: now, in: timezone) {
-                    // Rule set not active, don't block
-                    continue
-                }
-
-                // Block and log
-                ProviderXPCService.shared.decisions.add(hostname: hostname, action: .block, ruleSetName: ruleSet.name)
-                os_log("BLOCKED: %{public}@ (rule set: %{public}@)", log: logger, type: .info, hostname, ruleSet.name)
-                return .drop()
-            } else {
-                // No rule set, always block
-                ProviderXPCService.shared.decisions.add(hostname: hostname, action: .block)
-                os_log("BLOCKED: %{public}@ (always active)", log: logger, type: .info, hostname)
-                return .drop()
-            }
+        guard decision.blocked else {
+            // Allows are deliberately not recorded in the activity feed:
+            // they are every connection the Mac makes — noise that buries
+            // the blocks and a privacy liability worth avoiding.
+            os_log("ALLOWED: %{public}@", log: logger, type: .debug, hostname)
+            return .allow()
         }
 
-        // No match, allow. Deliberately not recorded in the activity feed:
-        // allows are every connection the Mac makes — noise that buries the
-        // blocks and a privacy liability worth avoiding.
-        os_log("ALLOWED: %{public}@", log: logger, type: .debug, hostname)
-        return .allow()
+        ProviderXPCService.shared.decisions.add(hostname: hostname, action: .block,
+                                                ruleSetName: decision.ruleSetName)
+        os_log("BLOCKED: %{public}@ (%{public}@)", log: logger, type: .info,
+               hostname, decision.ruleSetName ?? "always active")
+        return .drop()
     }
 
     // MARK: - Hostname Extraction

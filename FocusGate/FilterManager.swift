@@ -105,6 +105,12 @@ class FilterManager: ObservableObject {
             if manager.providerConfiguration != nil {
                 try? await systemExtension.activate()
             }
+
+            // Users who enabled the filter before the DNS proxy existed
+            // get it switched on here.
+            if manager.isEnabled {
+                try? await enableDNSProxy()
+            }
         } catch {
             self.status = "Error: \(error.localizedDescription)"
             print("❌ Failed to load filter status: \(error)")
@@ -153,6 +159,7 @@ class FilterManager: ObservableObject {
 
         do {
             try await manager.saveToPreferences()
+            try await enableDNSProxy()
             print("✅ Filter enabled successfully")
 
             // Reload to confirm
@@ -179,12 +186,45 @@ class FilterManager: ObservableObject {
 
         do {
             try await manager.saveToPreferences()
+            try? await disableDNSProxy()
             print("✅ Filter disabled successfully")
             await loadStatus()
         } catch {
             print("❌ Failed to disable filter: \(error)")
             throw error
         }
+    }
+
+    // MARK: - DNS Proxy
+
+    /// The DNS proxy makes blocked domains fail instantly (NXDOMAIN)
+    /// instead of timing out. It rides the same system extension.
+    private func enableDNSProxy() async throws {
+        let dnsManager = NEDNSProxyManager.shared()
+        try await dnsManager.loadFromPreferences()
+
+        let bundleID = "dev.turkdogan.FocusGate.FocusGateExtension"
+        if dnsManager.isEnabled,
+           dnsManager.providerProtocol?.providerBundleIdentifier == bundleID {
+            return // already configured
+        }
+
+        let proto = NEDNSProxyProviderProtocol()
+        proto.providerBundleIdentifier = bundleID
+        dnsManager.providerProtocol = proto
+        dnsManager.localizedDescription = "FocusGate Instant Block"
+        dnsManager.isEnabled = true
+
+        try await dnsManager.saveToPreferences()
+        print("✅ DNS proxy enabled")
+    }
+
+    private func disableDNSProxy() async throws {
+        let dnsManager = NEDNSProxyManager.shared()
+        try await dnsManager.loadFromPreferences()
+        dnsManager.isEnabled = false
+        try await dnsManager.saveToPreferences()
+        print("✅ DNS proxy disabled")
     }
 
     // MARK: - Configuration Reset

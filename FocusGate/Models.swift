@@ -191,6 +191,28 @@ struct FilterConfiguration: Codable {
         guard let pausedUntil else { return false }
         return pausedUntil > Date()
     }
+
+    /// Single source of truth for "should this hostname be blocked right
+    /// now" — shared by the socket filter and the DNS proxy so the two
+    /// enforcement layers can never disagree.
+    func blockDecision(for hostname: String, at date: Date = Date(),
+                       timezone: TimeZone = .current) -> (blocked: Bool, ruleSetName: String?) {
+        if isPaused { return (false, nil) }
+
+        for site in blockedSites where site.enabled {
+            guard DomainMatcher.matches(hostname, pattern: site) else { continue }
+
+            if let ruleSetId = site.ruleSetId {
+                guard let ruleSet = ruleSets.first(where: { $0.id == ruleSetId }) else { continue }
+                if !ruleSet.isActive(at: date, in: timezone) { continue }
+                return (true, ruleSet.name)
+            }
+
+            return (true, nil)
+        }
+
+        return (false, nil)
+    }
 }
 
 // MARK: - Decision Log Entry

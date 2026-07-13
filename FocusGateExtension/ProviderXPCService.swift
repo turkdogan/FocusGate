@@ -8,6 +8,21 @@
 import Foundation
 import os.log
 
+/// Thread-safe holder for the active configuration, shared by the socket
+/// filter provider, the DNS proxy provider, and the XPC update path —
+/// they all run in this one extension process.
+final class FilterState {
+    static let shared = FilterState()
+
+    private let queue = DispatchQueue(label: "dev.turkdogan.FocusGate.filterstate")
+    private var storedConfig: FilterConfiguration?
+
+    var config: FilterConfiguration? {
+        get { queue.sync { storedConfig } }
+        set { queue.sync { storedConfig = newValue } }
+    }
+}
+
 /// Thread-safe in-memory store of recent filtering decisions.
 /// Replaces per-flow JSON file writes, which are both too slow for the
 /// flow path and invisible to the app (root vs user container).
@@ -40,9 +55,6 @@ final class ProviderXPCService: NSObject {
     static let shared = ProviderXPCService()
 
     let decisions = DecisionStore()
-
-    /// Set by the provider; called with each configuration pushed by the app.
-    var configurationUpdateHandler: ((FilterConfiguration) -> Void)?
 
     private let logger = OSLog(subsystem: "dev.turkdogan.FocusGate", category: "ProviderXPCService")
     private var listener: NSXPCListener?
@@ -100,7 +112,7 @@ extension ProviderXPCService: ProviderCommunication {
 
         os_log("Configuration updated over XPC - Sites: %d, paused: %d",
                log: logger, type: .info, config.blockedSites.count, config.isPaused ? 1 : 0)
-        configurationUpdateHandler?(config)
+        FilterState.shared.config = config
         reply(true)
     }
 }
