@@ -19,23 +19,26 @@ struct StatusView: View {
                 .font(.title2)
                 .bold()
 
-            GroupBox("Network Extension Setup") {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundColor(.blue)
-                        Text("The FocusGate content filter extension ships with the app, so there is nothing extra to install. Click \"Enable Filter\" below and then approve the extension in System Settings > Privacy & Security > Network Extensions when prompted.")
-                            .font(.caption)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+            // Setup guidance only while setup is actually needed
+            if !filterManager.isEnabled {
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "info.circle.fill")
+                                .foregroundColor(.blue)
+                            Text("Click \"Enable Filter\" below, then approve the extension in System Settings when macOS asks (General > Login Items & Extensions > Network Extensions).")
+                                .font(.caption)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
 
-                    Button("Open System Settings") {
-                        filterManager.openSystemSettings()
+                        Button("Open System Settings") {
+                            filterManager.openSystemSettings()
+                        }
+                        .buttonStyle(.bordered)
+                        .font(.caption)
                     }
-                    .buttonStyle(.bordered)
-                    .font(.caption)
+                    .padding(.vertical, 8)
                 }
-                .padding(.vertical, 8)
             }
 
             // Filter status
@@ -71,14 +74,19 @@ struct StatusView: View {
                                 .buttonStyle(.borderedProminent)
                             }
 
-                            // Reset configuration button
-                            Button("Reset Configuration") {
-                                Task {
-                                    try? await filterManager.resetConfiguration()
+                            // Repair action for broken installs, tucked away
+                            Menu {
+                                Button("Reset Filter Configuration") {
+                                    Task {
+                                        try? await filterManager.resetConfiguration()
+                                    }
                                 }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
                             }
-                            .buttonStyle(.bordered)
-                            .foregroundColor(.orange)
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
+                            .help("Advanced")
                         }
                     }
 
@@ -151,7 +159,7 @@ struct StatusView: View {
             // Activity log
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Recent Activity")
+                    Text("Recently Blocked")
                         .font(.headline)
 
                     Spacer()
@@ -174,7 +182,7 @@ struct StatusView: View {
                         Image(systemName: "list.bullet.rectangle")
                             .font(.system(size: 36))
                             .foregroundColor(.secondary)
-                        Text("No recent activity")
+                        Text("No blocked attempts yet")
                             .foregroundColor(.secondary)
                             .font(.caption)
                     }
@@ -261,29 +269,24 @@ struct LogEntryRow: View {
                 .foregroundColor(.secondary)
                 .frame(width: 60, alignment: .leading)
 
+            Image(systemName: "xmark.shield.fill")
+                .foregroundColor(.red)
+                .font(.caption)
+
             Text(entry.hostname)
                 .font(.caption)
                 .lineLimit(1)
 
             Spacer()
 
-            if let processName = entry.processName {
-                Text(processName)
+            if let ruleSetName = entry.ruleSetName {
+                Text(ruleSetName)
                     .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .frame(width: 100, alignment: .trailing)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color.accentColor.opacity(0.15))
+                    .cornerRadius(4)
             }
-
-            Text(entry.action.rawValue.uppercased())
-                .font(.caption)
-                .bold()
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .background(entry.action == .block ? Color.red.opacity(0.2) : Color.green.opacity(0.2))
-                .foregroundColor(entry.action == .block ? .red : .green)
-                .cornerRadius(4)
-                .frame(width: 70)
         }
         .padding(.vertical, 2)
     }

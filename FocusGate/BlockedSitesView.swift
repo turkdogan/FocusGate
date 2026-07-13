@@ -152,45 +152,65 @@ struct BlockedSiteRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Toggle("", isOn: binding)
+            Toggle("", isOn: enabledBinding)
                 .toggleStyle(.switch)
                 .labelsHidden()
+                .help(site.enabled ? "Blocking on" : "Blocking off")
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(site.pattern)
-                    .font(.body)
-
-                Text(site.matchType.displayName)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            Text(site.pattern)
+                .font(.body)
 
             Spacer()
 
-            if let ruleSetId = site.ruleSetId,
-               let ruleSet = configStore.configuration.ruleSets.first(where: { $0.id == ruleSetId }) {
-                Text(ruleSet.name)
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.accentColor.opacity(0.2))
-                    .cornerRadius(4)
-            } else {
-                Text("Always")
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.gray.opacity(0.2))
-                    .cornerRadius(4)
+            // Inline editors — changes apply and reach the filter immediately
+            Picker("", selection: matchTypeBinding) {
+                ForEach(BlockedSite.MatchType.allCases, id: \.self) { type in
+                    Text(type.displayName).tag(type)
+                }
             }
+            .labelsHidden()
+            .fixedSize()
+            .help("How this pattern matches")
+
+            Picker("", selection: ruleSetBinding) {
+                Text("Always").tag(nil as UUID?)
+                ForEach(configStore.configuration.ruleSets) { ruleSet in
+                    Text(ruleSet.name).tag(ruleSet.id as UUID?)
+                }
+            }
+            .labelsHidden()
+            .fixedSize()
+            .help("When this site is blocked")
         }
         .padding(.vertical, 4)
     }
 
-    private var binding: Binding<Bool> {
+    private var enabledBinding: Binding<Bool> {
         Binding(
             get: { site.enabled },
             set: { _ in configStore.toggleBlockedSite(id: site.id) }
+        )
+    }
+
+    private var matchTypeBinding: Binding<BlockedSite.MatchType> {
+        Binding(
+            get: { site.matchType },
+            set: { newValue in
+                var updated = site
+                updated.matchType = newValue
+                configStore.updateBlockedSite(updated)
+            }
+        )
+    }
+
+    private var ruleSetBinding: Binding<UUID?> {
+        Binding(
+            get: { site.ruleSetId },
+            set: { newValue in
+                var updated = site
+                updated.ruleSetId = newValue
+                configStore.updateBlockedSite(updated)
+            }
         )
     }
 }
