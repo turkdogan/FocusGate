@@ -132,12 +132,14 @@ struct BlockedSitesView: View {
     private func deleteSites(at offsets: IndexSet) {
         for index in offsets {
             let site = configStore.configuration.blockedSites[index]
+            guard !site.isLocked else { continue }
             configStore.removeBlockedSite(id: site.id)
         }
     }
 
     private func deleteSelectedSites() {
-        for id in selectedSites {
+        let lockedIds = Set(configStore.configuration.blockedSites.filter(\.isLocked).map(\.id))
+        for id in selectedSites where !lockedIds.contains(id) {
             configStore.removeBlockedSite(id: id)
         }
         selectedSites.removeAll()
@@ -149,13 +151,15 @@ struct BlockedSitesView: View {
 struct BlockedSiteRow: View {
     let site: BlockedSite
     let configStore: ConfigurationStore
+    @State private var confirmingUnlock = false
 
     var body: some View {
         HStack(spacing: 12) {
             Toggle("", isOn: enabledBinding)
                 .toggleStyle(.switch)
                 .labelsHidden()
-                .help(site.enabled ? "Blocking on" : "Blocking off")
+                .disabled(site.isLocked)
+                .help(site.isLocked ? "Locked — unlock to change" : (site.enabled ? "Blocking on" : "Blocking off"))
 
             Text(site.pattern)
                 .font(.body)
@@ -170,6 +174,7 @@ struct BlockedSiteRow: View {
             }
             .labelsHidden()
             .fixedSize()
+            .disabled(site.isLocked)
             .help("How this pattern matches")
 
             Picker("", selection: ruleSetBinding) {
@@ -180,9 +185,43 @@ struct BlockedSiteRow: View {
             }
             .labelsHidden()
             .fixedSize()
+            .disabled(site.isLocked)
             .help("When this site is blocked")
+
+            Button {
+                if site.isLocked {
+                    confirmingUnlock = true
+                } else {
+                    setLocked(true)
+                }
+            } label: {
+                Image(systemName: site.isLocked ? "lock.fill" : "lock.open")
+                    .foregroundColor(site.isLocked ? .orange : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(site.isLocked
+                  ? "Locked: stays blocked during pauses and cannot be edited or deleted"
+                  : "Lock this site: it will stay blocked even when the filter is paused")
+            .confirmationDialog("Unlock \(site.pattern)?",
+                                isPresented: $confirmingUnlock) {
+                Button("Unlock", role: .destructive) {
+                    setLocked(false)
+                }
+                Button("Keep Locked", role: .cancel) { }
+            } message: {
+                Text("Unlocked sites can be edited, paused, and deleted again.")
+            }
         }
         .padding(.vertical, 4)
+    }
+
+    private func setLocked(_ locked: Bool) {
+        var updated = site
+        updated.locked = locked
+        if locked {
+            updated.enabled = true // locking implies blocking
+        }
+        configStore.updateBlockedSite(updated)
     }
 
     private var enabledBinding: Binding<Bool> {

@@ -16,6 +16,13 @@ struct BlockedSite: Codable, Identifiable, Equatable {
     var enabled: Bool
     var ruleSetId: UUID?          // nil = always active (no schedule)
 
+    /// Locked sites stay blocked through pauses and cannot be disabled or
+    /// deleted until explicitly unlocked — a commitment device.
+    /// Optional so configurations saved before this field existed decode.
+    var locked: Bool?
+
+    var isLocked: Bool { locked ?? false }
+
     enum MatchType: String, Codable, CaseIterable {
         case exactDomain          // example.com only
         case domainAndSubdomains  // example.com + *.example.com
@@ -197,10 +204,11 @@ struct FilterConfiguration: Codable {
     /// enforcement layers can never disagree.
     func blockDecision(for hostname: String, at date: Date = Date(),
                        timezone: TimeZone = .current) -> (blocked: Bool, ruleSetName: String?) {
-        if isPaused { return (false, nil) }
-
         for site in blockedSites where site.enabled {
             guard DomainMatcher.matches(hostname, pattern: site) else { continue }
+
+            // Pause releases ordinary sites; locked sites hold through it
+            if isPaused && !site.isLocked { continue }
 
             if let ruleSetId = site.ruleSetId {
                 guard let ruleSet = ruleSets.first(where: { $0.id == ruleSetId }) else { continue }
