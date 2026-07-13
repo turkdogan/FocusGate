@@ -54,19 +54,79 @@ class FilterManager: ObservableObject {
     func pushConfigurationUpdate() async {
         guard let data = currentConfigData() else { return }
 
-        // Live update: the running provider applies this immediately.
-        ProviderXPCClient.shared.updateConfiguration(data)
-
-        // Persisted update: what the provider reads on its next restart.
+        // Persist first: if the live push fails and we must restart the
+        // session, the restarted provider reads this saved copy.
         do {
             try await manager.loadFromPreferences()
             guard manager.isEnabled, let providerConfig = manager.providerConfiguration else { return }
 
             providerConfig.vendorConfiguration = ["filterConfiguration": data]
             try await manager.saveToPreferences()
-            print("✅ Pushed updated configuration to extension (\(data.count) bytes)")
         } catch {
             print("❌ Failed to persist configuration update: \(error)")
+        }
+
+        // Live update: the running provider applies this immediately.
+        let delivered = await withCheckedContinuation { continuation in
+            ProviderXPCClient.shared.updateConfiguration(data) { ok in
+                continuation.resume(returning: ok)
+            }
+        }
+
+        if delivered {
+            print("✅ Pushed updated configuration to extension (\(data.count) bytes)")
+        } else {
+            // Known macOS issue: the extension's XPC registration can go
+            // stale after a system extension upgrade. Restarting the
+            // filter session re-reads the saved config and re-registers.
+            print("⚠️ Live push failed — repairing filter session")
+            await repairFilterSession()
+        }
+    }
+
+    private var isRepairing = false
+
+    /// Bounces the filter and DNS proxy sessions so the extension process
+    /// restarts, re-reads the persisted configuration, and re-registers
+    /// its XPC service. Used when a live push cannot reach the extension.
+    private func repairFilterSession() async {
+        guard !isRepairing else { return }
+        isRepairing = true
+        defer { isRepairing = false }
+
+        status = "Re-syncing filter..."
+
+        do {
+            try await manager.loadFromPreferences()
+            guard manager.isEnabled else { return }
+
+            let dnsManager = NEDNSProxyManager.shared()
+            try await dnsManager.loadFromPreferences()
+            let dnsWasEnabled = dnsManager.isEnabled
+
+            manager.isEnabled = false
+            try await manager.saveToPreferences()
+            if dnsWasEnabled {
+                dnsManager.isEnabled = false
+                try await dnsManager.saveToPreferences()
+            }
+
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+
+            try await manager.loadFromPreferences()
+            manager.isEnabled = true
+            try await manager.saveToPreferences()
+            if dnsWasEnabled {
+                try await dnsManager.loadFromPreferences()
+                dnsManager.isEnabled = true
+                try await dnsManager.saveToPreferences()
+            }
+
+            print("🔧 Filter session repaired")
+            await loadStatus()
+        } catch {
+            print("❌ Filter repair failed: \(error)")
+            status = "Filter out of sync — use Disable then Enable Filter"
         }
     }
 
@@ -110,6 +170,11 @@ class FilterManager: ObservableObject {
             // get it switched on here.
             if manager.isEnabled {
                 try? await enableDNSProxy()
+
+                // Sync check: pushes the current config and self-repairs
+                // if the extension's XPC channel went stale (which can
+                // happen after extension upgrades).
+                await pushConfigurationUpdate()
             }
         } catch {
             self.status = "Error: \(error.localizedDescription)"
