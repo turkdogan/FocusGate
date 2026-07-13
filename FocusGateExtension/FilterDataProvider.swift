@@ -139,6 +139,7 @@ class FilterDataProvider: NEFilterDataProvider {
 
         fileLogger.log("✅ Filter started successfully")
         os_log("✅ Content filter started successfully", log: logger, type: .info)
+        DNSCacheFlusher.flush()
         completionHandler(nil)
     }
 

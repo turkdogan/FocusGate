@@ -113,6 +113,8 @@ extension ProviderXPCService: ProviderCommunication {
         os_log("Configuration updated over XPC - Sites: %d, paused: %d",
                log: logger, type: .info, config.blockedSites.count, config.isPaused ? 1 : 0)
         FilterState.shared.config = config
+        // New rules must not wait for cached DNS records to expire
+        DNSCacheFlusher.flush()
         reply(true)
     }
 }

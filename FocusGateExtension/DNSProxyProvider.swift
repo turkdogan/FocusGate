@@ -26,6 +26,8 @@ class DNSProxyProvider: NEDNSProxyProvider {
         os_log("🚀 DNS proxy starting", log: logger, type: .info)
         // Both providers run in this process; whichever starts first wins.
         ProviderXPCService.shared.start()
+        // Stale records from before the proxy existed must not linger
+        DNSCacheFlusher.flush()
         completionHandler(nil)
     }
 
