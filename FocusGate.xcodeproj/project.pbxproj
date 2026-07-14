@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1302C0912F0FA0B50096C21F /* FocusGateExtension-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 1302C0902F0FA0B50096C21F /* FocusGateExtension-Info.plist */; };
 		1302C0A12F0FCAB00096C21F /* NetworkExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1302C0752F0E96270096C21F /* NetworkExtension.framework */; };
 		1302C0C32F0FDAA00096C21F /* FocusGateExtension.systemextension in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = 1302C0A02F0FCAB00096C21F /* FocusGateExtension.systemextension */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -39,9 +38,6 @@
 /* Begin PBXFileReference section */
 		1302C01D2F0E91CF0096C21F /* FocusGate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FocusGate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1302C0752F0E96270096C21F /* NetworkExtension.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = NetworkExtension.framework; path = System/Library/Frameworks/NetworkExtension.framework; sourceTree = SDKROOT; };
-		1302C08E2F0FA0B50096C21F /* FocusGate.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FocusGate.entitlements; sourceTree = "<group>"; };
-		1302C08F2F0FA0B50096C21F /* FocusGateExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FocusGateExtension.entitlements; sourceTree = "<group>"; };
-		1302C0902F0FA0B50096C21F /* FocusGateExtension-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "FocusGateExtension-Info.plist"; sourceTree = "<group>"; };
 		1302C0A02F0FCAB00096C21F /* FocusGateExtension.systemextension */ = {isa = PBXFileReference; explicitFileType = "wrapper.system-extension"; includeInIndex = 0; path = FocusGateExtension.systemextension; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -93,9 +89,6 @@
 		1302C0142F0E91CF0096C21F = {
 			isa = PBXGroup;
 			children = (
-				1302C08E2F0FA0B50096C21F /* FocusGate.entitlements */,
-				1302C08F2F0FA0B50096C21F /* FocusGateExtension.entitlements */,
-				1302C0902F0FA0B50096C21F /* FocusGateExtension-Info.plist */,
 				1302C01F2F0E91CF0096C21F /* FocusGate */,
 				1302C0A22F0FCAB00096C21F /* FocusGateExtension */,
 				1302C0742F0E96270096C21F /* Frameworks */,
@@ -284,7 +277,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_ENTITLEMENTS = Resources/FocusGate.entitlements;
+				CODE_SIGN_ENTITLEMENTS = FocusGate/FocusGate.entitlements;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 9B6S2Y8856;
@@ -349,7 +342,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_ENTITLEMENTS = Resources/FocusGate.entitlements;
+				CODE_SIGN_ENTITLEMENTS = FocusGate/FocusGate.entitlements;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 9B6S2Y8856;
