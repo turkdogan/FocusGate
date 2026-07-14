@@ -8,3 +8,6 @@ DerivedData/
 # Xcode user state
 xcuserdata/
 *.xcuserstate
+
+# Release artifacts
+dist/
