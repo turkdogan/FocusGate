@@ -91,8 +91,8 @@ class DNSProxyProvider: NEDNSProxyProvider {
         if let qname = DNSMessage.queryName(in: datagram),
            let config = FilterState.shared.config,
            config.blockDecision(for: qname).blocked {
-            if let response = DNSMessage.nxdomainResponse(forQuery: datagram) {
-                os_log("DNS NXDOMAIN: %{public}@", log: logger, type: .info, qname)
+            if let response = DNSMessage.blockedResponse(forQuery: datagram) {
+                os_log("DNS blocked (unroutable answer): %{public}@", log: logger, type: .info, qname)
                 flow.writeDatagrams([response], sentBy: [endpoint]) { _ in }
                 return
             }
@@ -229,16 +229,44 @@ enum DNSMessage {
         return labels.joined(separator: ".").lowercased()
     }
 
-    /// Builds an NXDOMAIN response echoing the query's ID and question.
-    static func nxdomainResponse(forQuery query: Data) -> Data? {
+    /// Builds a response for a blocked domain: A answers 0.0.0.0, AAAA
+    /// answers ::, everything else gets an empty NOERROR (NODATA).
+    /// Pi-hole-style positive answers rather than synthesized NXDOMAIN —
+    /// mDNSResponder rejects our NXDOMAIN and hangs in retry backoff,
+    /// while a normally-shaped answer takes the same acceptance path as
+    /// every forwarded response. Browsers show "can't connect" instantly.
+    static func blockedResponse(forQuery query: Data) -> Data? {
         guard let questionEnd = questionSectionEnd(in: query) else { return nil }
+        let qtype = UInt16(query[questionEnd - 4]) << 8 | UInt16(query[questionEnd - 3])
 
-        var response = Data(query.prefix(questionEnd))
+        // Keep the FULL query — a query has no answer/authority records, so
+        // everything after the question is its additional section (EDNS OPT,
+        // cookies). mDNSResponder rejects responses that drop the OPT record
+        // (treats them as broken legacy replies and hangs in retry), so the
+        // additional section must survive verbatim.
+        var response = Data(query)
         response[2] = query[2] | 0x80                          // QR = response
-        response[3] = (query[3] & 0xF0) | 0x03 | 0x80          // RA set, RCODE = NXDOMAIN
-        response[6] = 0; response[7] = 0                       // ANCOUNT = 0
-        response[8] = 0; response[9] = 0                       // NSCOUNT = 0
-        response[10] = 0; response[11] = 0                     // ARCOUNT = 0 (EDNS dropped with it)
+        response[3] = (query[3] & 0x10) | 0x80                 // RA set, CD preserved, RCODE 0
+
+        let rdata: [UInt8]?
+        switch qtype {
+        case 1:  rdata = [0, 0, 0, 0]                          // A     -> 0.0.0.0
+        case 28: rdata = Array(repeating: 0, count: 16)        // AAAA  -> ::
+        default: rdata = nil                                   // NODATA
+        }
+
+        if let rdata {
+            response[6] = 0; response[7] = 1                   // ANCOUNT = 1
+            var record: [UInt8] = [0xC0, 0x0C]                 // name: pointer to question
+            record += [UInt8(qtype >> 8), UInt8(qtype & 0xFF)] // TYPE echoes the question
+            record += [0x00, 0x01]                             // CLASS IN
+            record += [0x00, 0x00, 0x00, 0x0A]                 // TTL 10s
+            record += [0x00, UInt8(rdata.count)]               // RDLENGTH
+            record += rdata
+            // Answer section sits between question and additional
+            response.insert(contentsOf: record, at: questionEnd)
+        }
+
         return response
     }
 

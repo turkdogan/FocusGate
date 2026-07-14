@@ -184,6 +184,17 @@ class FilterDataProvider: NEFilterDataProvider {
     }
 
     override func handleNewFlow(_ flow: NEFilterFlow) -> NEFilterNewFlowVerdict {
+        // DNS traffic is never blocked here: the DNS proxy is the authority
+        // for name resolution and answers blocked domains unroutably.
+        // The system attributes the resolver's own query flows to the
+        // hostname being resolved — dropping those silently swallows the
+        // query and hangs mDNSResponder (and every browser) for a minute.
+        if let socketFlow = flow as? NEFilterSocketFlow,
+           let remote = socketFlow.remoteEndpoint as? NWHostEndpoint,
+           remote.port == "53" {
+            return .allow()
+        }
+
         guard let hostname = extractHostname(from: flow) else {
             return .allow()
         }
