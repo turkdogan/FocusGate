@@ -15,6 +15,7 @@ class FilterManager: ObservableObject {
     @Published var isEnabled: Bool = false
     @Published var status: String = "Unknown"
     @Published var isLoading: Bool = false
+    @Published var dnsProxyEnabled: Bool = false
 
     private let manager = NEFilterManager.shared()
     private let systemExtension = SystemExtensionManager()
@@ -170,6 +171,9 @@ class FilterManager: ObservableObject {
             // get it switched on here.
             if manager.isEnabled {
                 try? await enableDNSProxy()
+                let dnsManager = NEDNSProxyManager.shared()
+                try? await dnsManager.loadFromPreferences()
+                dnsProxyEnabled = dnsManager.isEnabled
 
                 // Sync check: pushes the current config and self-repairs
                 // if the extension's XPC channel went stale (which can

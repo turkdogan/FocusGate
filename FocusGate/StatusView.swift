@@ -10,6 +10,7 @@ import SwiftUI
 struct StatusView: View {
     @EnvironmentObject var filterManager: FilterManager
     @EnvironmentObject var configStore: ConfigurationStore
+    @EnvironmentObject var blockFeed: BlockFeedMonitor
     @State private var logEntries: [DecisionLogEntry] = []
     @State private var refreshTimer: Timer?
 
@@ -106,6 +107,18 @@ struct StatusView: View {
                         .padding(8)
                         .background(Color.orange.opacity(0.1))
                         .cornerRadius(8)
+                    }
+
+                    // Health checklist: every layer at a glance
+                    if filterManager.isEnabled {
+                        Divider()
+                        HStack(spacing: 18) {
+                            HealthItem(label: "Filter", healthy: filterManager.isEnabled)
+                            HealthItem(label: "Instant DNS", healthy: filterManager.dnsProxyEnabled)
+                            HealthItem(label: "Live feed", healthy: blockFeed.feedHealthy,
+                                       unhealthyHint: "Feed unavailable — blocking still works. A restart of your Mac restores it.")
+                            Spacer()
+                        }
                     }
 
                     // Active rule sets
@@ -209,7 +222,7 @@ struct StatusView: View {
     // MARK: - Actions
 
     private func loadLog() {
-        ProviderXPCClient.shared.fetchRecentDecisions { entries in
+        ProviderXPCClient.shared.fetchRecentDecisions { entries, _ in
             logEntries = Array(entries.prefix(100))
         }
     }
@@ -229,6 +242,26 @@ struct StatusView: View {
     private func stopAutoRefresh() {
         refreshTimer?.invalidate()
         refreshTimer = nil
+    }
+}
+
+// MARK: - Health Item
+
+struct HealthItem: View {
+    let label: String
+    let healthy: Bool
+    var unhealthyHint: String = ""
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: healthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundColor(healthy ? .green : .orange)
+                .font(.caption)
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .help(healthy ? "\(label): OK" : (unhealthyHint.isEmpty ? "\(label): not running" : unhealthyHint))
     }
 }
 
@@ -279,14 +312,13 @@ struct LogEntryRow: View {
 
             Spacer()
 
-            if let ruleSetName = entry.ruleSetName {
-                Text(ruleSetName)
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color.accentColor.opacity(0.15))
-                    .cornerRadius(4)
-            }
+            Text(entry.reasonLabel)
+                .font(.caption)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(entry.locked == true ? Color.orange.opacity(0.2) : Color.accentColor.opacity(0.15))
+                .foregroundColor(entry.locked == true ? .orange : .primary)
+                .cornerRadius(4)
         }
         .padding(.vertical, 2)
     }

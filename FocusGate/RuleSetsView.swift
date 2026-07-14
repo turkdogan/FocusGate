@@ -347,6 +347,9 @@ struct TimeWindowRow: View {
                 .font(.caption)
                 .foregroundColor(.orange)
                 .frame(width: 64, alignment: .leading)
+                .help(window.isOvernight
+                      ? "Covers this day's late evening AND this day's early morning (e.g. Mon 22:00–24:00 and Mon 00:00–06:00). To also cover the following morning, add the window to the next day."
+                      : "")
 
             Button(action: onDelete) {
                 Image(systemName: "minus.circle.fill")

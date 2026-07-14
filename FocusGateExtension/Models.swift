@@ -203,7 +203,7 @@ struct FilterConfiguration: Codable {
     /// now" — shared by the socket filter and the DNS proxy so the two
     /// enforcement layers can never disagree.
     func blockDecision(for hostname: String, at date: Date = Date(),
-                       timezone: TimeZone = .current) -> (blocked: Bool, ruleSetName: String?) {
+                       timezone: TimeZone = .current) -> (blocked: Bool, ruleSetName: String?, locked: Bool) {
         for site in blockedSites where site.enabled {
             guard DomainMatcher.matches(hostname, pattern: site) else { continue }
 
@@ -213,13 +213,13 @@ struct FilterConfiguration: Codable {
             if let ruleSetId = site.ruleSetId {
                 guard let ruleSet = ruleSets.first(where: { $0.id == ruleSetId }) else { continue }
                 if !ruleSet.isActive(at: date, in: timezone) { continue }
-                return (true, ruleSet.name)
+                return (true, ruleSet.name, site.isLocked)
             }
 
-            return (true, nil)
+            return (true, nil, site.isLocked)
         }
 
-        return (false, nil)
+        return (false, nil, false)
     }
 }
 
@@ -232,6 +232,16 @@ struct DecisionLogEntry: Codable, Identifiable {
     let action: Action
     let ruleSetName: String?
     let processName: String?
+
+    /// True when the block came from a locked site. Optional so entries
+    /// from older extensions still decode.
+    var locked: Bool?
+
+    /// Human-readable reason for display ("Work Hours", "Locked", "Always").
+    var reasonLabel: String {
+        if locked == true { return "Locked" }
+        return ruleSetName ?? "Always"
+    }
 
     enum Action: String, Codable {
         case allow

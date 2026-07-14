@@ -221,7 +221,8 @@ class FilterDataProvider: NEFilterDataProvider {
         }
 
         ProviderXPCService.shared.decisions.add(hostname: hostname, action: .block,
-                                                ruleSetName: decision.ruleSetName)
+                                                ruleSetName: decision.ruleSetName,
+                                                locked: decision.locked)
         os_log("BLOCKED: %{public}@ (%{public}@)", log: logger, type: .info,
                hostname, decision.ruleSetName ?? "always active")
         return .drop()

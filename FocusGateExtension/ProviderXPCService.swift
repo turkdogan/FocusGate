@@ -31,9 +31,11 @@ final class DecisionStore {
     private var entries: [DecisionLogEntry] = []
     private let maxEntries = 500
 
-    func add(hostname: String, action: DecisionLogEntry.Action, ruleSetName: String? = nil, processName: String? = nil) {
-        let entry = DecisionLogEntry(hostname: hostname, action: action,
+    func add(hostname: String, action: DecisionLogEntry.Action, ruleSetName: String? = nil,
+             processName: String? = nil, locked: Bool = false) {
+        var entry = DecisionLogEntry(hostname: hostname, action: action,
                                      ruleSetName: ruleSetName, processName: processName)
+        entry.locked = locked
         queue.async {
             self.entries.insert(entry, at: 0)
             if self.entries.count > self.maxEntries {

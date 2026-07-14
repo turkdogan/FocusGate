@@ -74,15 +74,19 @@ struct BlockedSitesView: View {
                 }
 
                 if configStore.configuration.blockedSites.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "shield.slash")
+                    VStack(spacing: 12) {
+                        Image(systemName: "shield.lefthalf.filled")
                             .font(.system(size: 48))
-                            .foregroundColor(.secondary)
-                        Text("No blocked sites")
-                            .foregroundColor(.secondary)
-                        Text("Add a website above to get started")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.accentColor)
+                        Text("Welcome to FocusGate")
+                            .font(.title3.bold())
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("Type a distracting site above — reddit.com blocks its subdomains too", systemImage: "1.circle")
+                            Label("Blocking starts the moment you press Add, in every browser and app", systemImage: "2.circle")
+                            Label("Schedules live in the Rule Sets tab; quick pause lives in the menubar shield", systemImage: "3.circle")
+                        }
+                        .font(.callout)
+                        .foregroundColor(.secondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(40)

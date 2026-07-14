@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>BuildMachineOSBuild</key>
+	<string>25F71</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>FocusGateExtension</string>
+	<key>CFBundleExecutable</key>
+	<string>dev.turkdogan.FocusGate.FocusGateExtension</string>
+	<key>CFBundleIdentifier</key>
+	<string>dev.turkdogan.FocusGate.FocusGateExtension</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>dev.turkdogan.FocusGate.FocusGateExtension</string>
+	<key>CFBundlePackageType</key>
+	<string>SYSX</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleSupportedPlatforms</key>
+	<array>
+		<string>MacOSX</string>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>15</string>
+	<key>DTCompiler</key>
+	<string>com.apple.compilers.llvm.clang.1_0</string>
+	<key>DTPlatformBuild</key>
+	<string>25A352</string>
+	<key>DTPlatformName</key>
+	<string>macosx</string>
+	<key>DTPlatformVersion</key>
+	<string>26.0</string>
+	<key>DTSDKBuild</key>
+	<string>25A352</string>
+	<key>DTSDKName</key>
+	<string>macosx26.0</string>
+	<key>DTXcode</key>
+	<string>2601</string>
+	<key>DTXcodeBuild</key>
+	<string>17A400</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>26.0</string>
+	<key>NSSystemExtensionUsageDescription</key>
+	<string>FocusGate uses a system extension to block distracting websites during focus sessions.</string>
+	<key>NetworkExtension</key>
+	<dict>
+		<key>NEMachServiceName</key>
+		<string>9B6S2Y8856.dev.turkdogan.focusgate.xpc</string>
+		<key>NEProviderClasses</key>
+		<dict>
+			<key>com.apple.networkextension.dns-proxy</key>
+			<string>dev_turkdogan_FocusGate_FocusGateExtension.DNSProxyProvider</string>
+			<key>com.apple.networkextension.filter-data</key>
+			<string>dev_turkdogan_FocusGate_FocusGateExtension.FilterDataProvider</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

@@ -17,6 +17,23 @@ import os.log
 final class BlockFeedMonitor: ObservableObject {
     @Published private(set) var recentBlocks: [DecisionLogEntry] = []
 
+    /// Whether the last activity-feed fetch reached the extension —
+    /// the health indicator for the XPC channel.
+    @Published private(set) var feedHealthy: Bool = false
+
+    /// User-facing notification behavior, set from Settings.
+    enum NotificationMode: String, CaseIterable {
+        case off, firstPerSite, all
+
+        var label: String {
+            switch self {
+            case .off: return "Off"
+            case .firstPerSite: return "Once per site"
+            case .all: return "Every block"
+            }
+        }
+    }
+
     private let logger = OSLog(subsystem: "dev.turkdogan.FocusGate", category: "BlockFeedMonitor")
     private var timer: Timer?
     private var lastSeen = Date()
@@ -43,8 +60,9 @@ final class BlockFeedMonitor: ObservableObject {
     }
 
     private func poll() {
-        ProviderXPCClient.shared.fetchRecentDecisions { [weak self] entries in
+        ProviderXPCClient.shared.fetchRecentDecisions { [weak self] entries, reachable in
             guard let self else { return }
+            self.feedHealthy = reachable
 
             let blocks = entries.filter { $0.action == .block }
 
@@ -62,27 +80,30 @@ final class BlockFeedMonitor: ObservableObject {
     }
 
     private func notify(about entries: [DecisionLogEntry]) {
+        let mode = NotificationMode(rawValue: UserDefaults.standard.string(forKey: "notificationMode") ?? "") ?? .all
+        guard mode != .off else { return }
+
         let now = Date()
-        // One notification per hostname per cooldown window
-        var hosts: [String] = []
+        var toNotify: [DecisionLogEntry] = []
         for entry in entries {
             let host = entry.hostname
-            if let last = lastNotified[host], now.timeIntervalSince(last) < notificationCooldown {
-                continue
+            if let last = lastNotified[host] {
+                if mode == .firstPerSite { continue }                       // once per app session
+                if now.timeIntervalSince(last) < notificationCooldown { continue }
             }
-            if !hosts.contains(host) {
-                hosts.append(host)
+            if !toNotify.contains(where: { $0.hostname == host }) {
+                toNotify.append(entry)
                 lastNotified[host] = now
             }
         }
 
-        for host in hosts {
+        for entry in toNotify {
             let content = UNMutableNotificationContent()
-            content.title = "Site blocked"
-            content.body = host
+            content.title = "Blocked · \(entry.reasonLabel)"
+            content.body = entry.hostname
             content.sound = nil
 
-            let request = UNNotificationRequest(identifier: "block-\(host)-\(now.timeIntervalSince1970)",
+            let request = UNNotificationRequest(identifier: "block-\(entry.hostname)-\(now.timeIntervalSince1970)",
                                                 content: content, trigger: nil)
             UNUserNotificationCenter.current().add(request)
         }

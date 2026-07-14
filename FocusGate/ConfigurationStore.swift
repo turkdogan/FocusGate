@@ -175,4 +175,22 @@ class ConfigurationStore: ObservableObject {
     func getActiveRuleSets(at date: Date = Date(), in timezone: TimeZone = .current) -> [RuleSet] {
         return configuration.ruleSets.filter { $0.isActive(at: date, in: timezone) }
     }
+
+    /// The currently-active schedule window with the latest end time, for
+    /// "Work Hours until 17:00" style status lines.
+    func currentActiveWindow(at date: Date = Date()) -> (name: String, until: TimeOfDay)? {
+        let weekday = Calendar.current.component(.weekday, from: date)
+        let now = TimeOfDay.now
+
+        var best: (name: String, until: TimeOfDay)?
+        for ruleSet in configuration.ruleSets {
+            guard let day = ruleSet.schedules.first(where: { $0.weekday.rawValue == weekday }) else { continue }
+            for window in day.windows where window.contains(time: now) {
+                if best == nil || window.end > best!.until {
+                    best = (ruleSet.name, window.end)
+                }
+            }
+        }
+        return best
+    }
 }

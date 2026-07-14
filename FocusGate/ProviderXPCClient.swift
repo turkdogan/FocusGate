@@ -46,21 +46,22 @@ final class ProviderXPCClient {
     }
 
     /// Fetches recent decisions from the provider. Completion is called on
-    /// the main queue; an unreachable extension yields an empty array.
+    /// the main queue with the entries and whether the extension was
+    /// reachable (the feed's health signal).
     func fetchRecentDecisions(since: Date = .distantPast,
-                              completion: @escaping ([DecisionLogEntry]) -> Void) {
-        let finish: ([DecisionLogEntry]) -> Void = { entries in
-            DispatchQueue.main.async { completion(entries) }
+                              completion: @escaping ([DecisionLogEntry], Bool) -> Void) {
+        let finish: ([DecisionLogEntry], Bool) -> Void = { entries, ok in
+            DispatchQueue.main.async { completion(entries, ok) }
         }
 
-        guard let proxy = proxy(onError: { finish([]) }) else {
-            finish([])
+        guard let proxy = proxy(onError: { finish([], false) }) else {
+            finish([], false)
             return
         }
 
         proxy.fetchRecentDecisions(sinceTimestamp: since.timeIntervalSince1970) { data in
             let entries = (try? JSONDecoder().decode([DecisionLogEntry].self, from: data)) ?? []
-            finish(entries)
+            finish(entries, true)
         }
     }
 
