@@ -19,7 +19,7 @@ set -euo pipefail
 #     — see FocusGateExtension-DeveloperID.entitlements.
 #  4. notarytool keychain profile:
 #     xcrun notarytool store-credentials focusgate-notary \
-#       --apple-id ttasdelen@gmail.com --team-id 9B6S2Y8856
+#       --apple-id turkdogan@me.com --team-id 9B6S2Y8856
 
 VERSION="${1:?Usage: release.sh <version> <build_number>}"
 BUILD_NUM="${2:?Usage: release.sh <version> <build_number>}"
@@ -28,7 +28,7 @@ ARCHIVE="dist/FocusGate.xcarchive"
 EXPORT_DIR="dist/export"
 APP_DIR="$EXPORT_DIR/FocusGate.app"
 ZIP="dist/FocusGate-${VERSION}.zip"
-KEYCHAIN_PROFILE="focusgate-notary"
+KEYCHAIN_PROFILE="${KEYCHAIN_PROFILE:-prio-notary}"
 
 mkdir -p dist
 

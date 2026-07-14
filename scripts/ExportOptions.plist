@@ -7,6 +7,15 @@
 	<key>teamID</key>
 	<string>9B6S2Y8856</string>
 	<key>signingStyle</key>
-	<string>automatic</string>
+	<string>manual</string>
+	<key>signingCertificate</key>
+	<string>Developer ID Application</string>
+	<key>provisioningProfiles</key>
+	<dict>
+		<key>dev.turkdogan.FocusGate</key>
+		<string>FocusGate DevID</string>
+		<key>dev.turkdogan.FocusGate.FocusGateExtension</key>
+		<string>FocusGateExtension DevID</string>
+	</dict>
 </dict>
 </plist>
