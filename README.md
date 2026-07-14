@@ -33,6 +33,10 @@ FocusGateExtension (system extension, runs as root)
 
 Configuration flows from app to extension two ways: embedded in the provider configuration's `vendorConfiguration` (survives restarts) and pushed live over XPC (applies immediately). The extension runs as root, so the user's App Group container is *not* shared with it — that's why XPC and vendorConfiguration exist.
 
+## Install
+
+Download the latest notarized build from [Releases](https://github.com/turkdogan/FocusGate/releases), unzip, drag **FocusGate.app** to `/Applications`, launch, click **Enable Filter**, and approve the extension when macOS asks (System Settings → General → Login Items & Extensions) plus the content-filter dialog. That's it.
+
 ## Building
 
 Requirements: Xcode 16+, an Apple Developer account (free won't do — Network Extension entitlements require a paid team).
