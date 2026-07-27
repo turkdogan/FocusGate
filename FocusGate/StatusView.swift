@@ -11,8 +11,11 @@ struct StatusView: View {
     @EnvironmentObject var filterManager: FilterManager
     @EnvironmentObject var configStore: ConfigurationStore
     @EnvironmentObject var blockFeed: BlockFeedMonitor
-    @State private var logEntries: [DecisionLogEntry] = []
-    @State private var refreshTimer: Timer?
+
+    // Fed by BlockFeedMonitor's doorbell-driven feed — no timer here.
+    private var logEntries: [DecisionLogEntry] {
+        Array(blockFeed.allDecisions.prefix(100))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -178,7 +181,7 @@ struct StatusView: View {
                     Spacer()
 
                     Button("Refresh") {
-                        loadLog()
+                        blockFeed.refresh()
                     }
                     .buttonStyle(.borderless)
                     .font(.caption)
@@ -211,37 +214,16 @@ struct StatusView: View {
             }
         }
         .onAppear {
-            loadLog()
-            startAutoRefresh()
-        }
-        .onDisappear {
-            stopAutoRefresh()
+            blockFeed.refresh()
         }
     }
 
     // MARK: - Actions
 
-    private func loadLog() {
-        ProviderXPCClient.shared.fetchRecentDecisions { entries, _ in
-            logEntries = Array(entries.prefix(100))
-        }
-    }
-
     private func clearLog() {
         ProviderXPCClient.shared.clearDecisions { _ in
-            loadLog()
+            blockFeed.reload()
         }
-    }
-
-    private func startAutoRefresh() {
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
-            loadLog()
-        }
-    }
-
-    private func stopAutoRefresh() {
-        refreshTimer?.invalidate()
-        refreshTimer = nil
     }
 }
 

@@ -19,6 +19,11 @@ enum FocusGateXPC {
     /// Only clients signed by this team may connect.
     static let codeSigningRequirement =
         "anchor apple generic and certificate leaf[subject.OU] = \"9B6S2Y8856\""
+
+    /// Darwin notification the extension posts (debounced) when new
+    /// decisions land. The app fetches on this doorbell instead of
+    /// polling, so both processes idle at zero between blocks.
+    static let decisionsDidChange = "dev.turkdogan.focusgate.decisions"
 }
 
 /// Calls the app can make into the running filter provider.

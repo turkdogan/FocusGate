@@ -30,6 +30,7 @@ final class DecisionStore {
     private let queue = DispatchQueue(label: "dev.turkdogan.FocusGate.decisions")
     private var entries: [DecisionLogEntry] = []
     private let maxEntries = 500
+    private var doorbellScheduled = false
 
     func add(hostname: String, action: DecisionLogEntry.Action, ruleSetName: String? = nil,
              processName: String? = nil, locked: Bool = false) {
@@ -41,6 +42,23 @@ final class DecisionStore {
             if self.entries.count > self.maxEntries {
                 self.entries.removeLast(self.entries.count - self.maxEntries)
             }
+            self.scheduleDoorbell()
+        }
+    }
+
+    /// Rings the app's doorbell so it fetches the new entries. One page
+    /// load fans out into dozens of flows, so posts are coalesced into
+    /// at most one every half second.
+    private func scheduleDoorbell() {
+        guard !doorbellScheduled else { return }
+        doorbellScheduled = true
+        queue.asyncAfter(deadline: .now() + 0.5) {
+            self.doorbellScheduled = false
+            CFNotificationCenterPostNotification(
+                CFNotificationCenterGetDarwinNotifyCenter(),
+                CFNotificationName(FocusGateXPC.decisionsDidChange as CFString),
+                nil, nil, true
+            )
         }
     }
 
