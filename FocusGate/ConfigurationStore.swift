@@ -17,6 +17,7 @@ class ConfigurationStore: ObservableObject {
     }
 
     private let userDefaults: UserDefaults?
+    private var pauseExpiryTimer: Timer?
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private let logger = OSLog(subsystem: "dev.turkdogan.FocusGate", category: "ConfigurationStore")
@@ -52,6 +53,10 @@ class ConfigurationStore: ObservableObject {
             // Save initial empty configuration
             save()
         }
+
+        // A pause left over from a previous run: clear it if already
+        // expired, or arm the expiry event if it is still ticking.
+        schedulePauseExpiry()
     }
 
     // MARK: - Persistence
@@ -104,13 +109,39 @@ class ConfigurationStore: ObservableObject {
 
     func pause(for duration: TimeInterval) {
         configuration.pausedUntil = Date().addingTimeInterval(duration)
+        schedulePauseExpiry()
     }
 
     func resumeBlocking() {
+        pauseExpiryTimer?.invalidate()
+        pauseExpiryTimer = nil
         configuration.pausedUntil = nil
     }
 
     var isPaused: Bool { configuration.isPaused }
+
+    /// The pause end is a wall-clock fact, but SwiftUI only redraws on
+    /// published changes — without an event at expiry the menubar icon
+    /// and status line stay frozen in their paused state. Clearing
+    /// pausedUntil here also re-pushes the configuration, which flushes
+    /// DNS records cached while the pause was open.
+    private func schedulePauseExpiry() {
+        pauseExpiryTimer?.invalidate()
+        pauseExpiryTimer = nil
+
+        guard let until = configuration.pausedUntil else { return }
+        guard until > Date() else {
+            configuration.pausedUntil = nil
+            return
+        }
+
+        let timer = Timer(fire: until, interval: 0, repeats: false) { [weak self] _ in
+            self?.pauseExpiryTimer = nil
+            self?.configuration.pausedUntil = nil
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        pauseExpiryTimer = timer
+    }
 
     // MARK: - Blocked Sites
 
